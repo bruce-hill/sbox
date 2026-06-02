@@ -19,12 +19,13 @@ Options:
 Supported Tools (with specialized bindings):
   Shells: bash, sh, dash, zsh, fish, ksh, tcsh, csh, pwsh
   Editors: vi, vim, nvim
-  VCS: git, ssh
+  VCS: git, ssh, jj
   Languages: python, perl, go, lua, node, npm, yarn, pnpm, cargo, rust, ruby, gem, bundle, java, mvn, gradle
   Other: gemini, claude, curl, bat, delta
 
 Examples:
   sbox bash
+  sbox jj st
   sbox gemini -r
   sbox python script.py
   sbox sh -c 'curl https://example.com/script.sh | bash'
@@ -105,8 +106,8 @@ case "${CMD[0]}" in
         RO_BINDS+=("$HOME/.m2/settings.xml")
         TMPFS_BINDS+=("$HOME/.m2/repository" "$HOME/.gradle/caches")
         ;;
-    ssh*|git*)
-        RO_BINDS+=("$HOME/.ssh/config")
+    ssh*|git*|jj)
+        RO_BINDS+=("$HOME/.ssh" "$HOME/.config/git" "$HOME/.config/jj")
         if [ -n "${SSH_AUTH_SOCK:-}" ]; then
             RW_BINDS+=("$SSH_AUTH_SOCK")
             ENV+=(--setenv SSH_AUTH_SOCK "$SSH_AUTH_SOCK")
