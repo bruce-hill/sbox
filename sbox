@@ -32,14 +32,25 @@ case "${CMD[0]}" in
         ;;
 esac
 
-# Resolve agent binary path BEFORE entering sandbox
+# Resolve binary path BEFORE entering sandbox
 BIN="$(command -v "${CMD[0]}" || true)"
 if [ -z "$BIN" ]; then
-    echo "Error: agent command not found: ${CMD[0]}" >&2
+    echo "Error: command not found: ${CMD[0]}" >&2
     exit 1
 fi
 
 extra_binds=()
+add_path_binds() {
+    local path_val="$1"
+    [ -z "$path_val" ] && return
+    IFS=':' read -ra ADDR <<< "$path_val"
+    for p in "${ADDR[@]}"; do
+        if [ -d "$p" ]; then
+            extra_binds+=(--ro-bind "$p" "$p")
+        fi
+    done
+}
+
 GIT_DIR="$WORKSPACE/.git"
 if [ -f "$GIT_DIR" ]; then
     LINKED_GIT="$(grep '^gitdir:' "$GIT_DIR" | cut -d' ' -f2)"
@@ -57,16 +68,22 @@ for p in "${RO_BINDS[@]}"; do
     [ -e "$p" ] && extra_binds+=(--ro-bind "$p" "$p")
 done
 
+add_path_binds "$PATH"
+add_path_binds "${C_INCLUDE_PATH:-}"
+add_path_binds "${CPLUS_INCLUDE_PATH:-}"
+add_path_binds "${LIBRARY_PATH:-}"
+add_path_binds "${LD_LIBRARY_PATH:-}"
+
+# Pass through these variables if they are set
+[ -n "${C_INCLUDE_PATH:-}" ] && ENV+=(--setenv C_INCLUDE_PATH "$C_INCLUDE_PATH")
+[ -n "${CPLUS_INCLUDE_PATH:-}" ] && ENV+=(--setenv CPLUS_INCLUDE_PATH "$CPLUS_INCLUDE_PATH")
+[ -n "${LIBRARY_PATH:-}" ] && ENV+=(--setenv LIBRARY_PATH "$LIBRARY_PATH")
+[ -n "${LD_LIBRARY_PATH:-}" ] && ENV+=(--setenv LD_LIBRARY_PATH "$LD_LIBRARY_PATH")
+
 exec bwrap \
     --unshare-all \
     --share-net \
-    --ro-bind /usr /usr \
-    --ro-bind /bin /bin \
-    --ro-bind /lib /lib \
-    --ro-bind /lib64 /lib64 \
-    --ro-bind /etc /etc \
-    --ro-bind /opt /opt \
-    --ro-bind "$CMD" "$CMD" \
+    --ro-bind "$BIN" "$BIN" \
     --ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig" \
     --bind "$WORKSPACE" "$WORKSPACE" \
     "${ENV[@]}" \
