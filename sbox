@@ -9,9 +9,60 @@ WORKSPACE="$(realpath "$PWD")"
 CMD=("${@}")
 
 ENV=()
+RO_HOME_BINDS=()
+TMPFS_BINDS=()
+EXTRA_PATH_BINDS=""
 
 RW_BINDS=("$HOME/go" "$HOME/.cache/go-build")
 case "${CMD[0]}" in
+    python*)
+        RO_HOME_BINDS+=("$HOME/.pythonrc.py")
+        for d in "$HOME/.local/lib"/python*; do [ -d "$d" ] && RO_HOME_BINDS+=("$d"); done
+        TMPFS_BINDS+=("$HOME/.cache/pip")
+        [ -n "${PYTHONPATH:-}" ] && {
+            ENV+=(--setenv PYTHONPATH "$PYTHONPATH")
+            EXTRA_PATH_BINDS="${EXTRA_PATH_BINDS:+$EXTRA_PATH_BINDS:}$PYTHONPATH"
+        }
+        ;;
+    lua*)
+        RO_HOME_BINDS+=("$HOME/.lua" "$HOME/.luarocks")
+        [ -n "${LUA_PATH:-}" ] && ENV+=(--setenv LUA_PATH "$LUA_PATH")
+        [ -n "${LUA_CPATH:-}" ] && ENV+=(--setenv LUA_CPATH "$LUA_CPATH")
+        ;;
+    node*|npm*|yarn*|pnpm*)
+        RO_HOME_BINDS+=("$HOME/.npmrc" "$HOME/.yarnrc")
+        TMPFS_BINDS+=("$HOME/.npm" "$HOME/.cache/yarn" "$HOME/.local/share/pnpm")
+        [ -n "${NODE_PATH:-}" ] && ENV+=(--setenv NODE_PATH "$NODE_PATH")
+        ;;
+    cargo*|rust*)
+        RO_HOME_BINDS+=("$HOME/.rustup" "$HOME/.cargo/config.toml")
+        TMPFS_BINDS+=("$HOME/.cargo/registry" "$HOME/.cargo/git")
+        ;;
+    ruby*|gem*|bundle*)
+        RO_HOME_BINDS+=("$HOME/.gemrc" "$HOME/.bundle/config")
+        TMPFS_BINDS+=("$HOME/.gem")
+        ;;
+    java*|mvn*|gradle*)
+        RO_HOME_BINDS+=("$HOME/.m2/settings.xml")
+        TMPFS_BINDS+=("$HOME/.m2/repository" "$HOME/.gradle/caches")
+        ;;
+    ssh*|git*)
+        RO_HOME_BINDS+=("$HOME/.ssh/config")
+        if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+            RW_BINDS+=("$SSH_AUTH_SOCK")
+            ENV+=(--setenv SSH_AUTH_SOCK "$SSH_AUTH_SOCK")
+        fi
+        ;;
+    curl*)
+        RO_HOME_BINDS+=("$HOME/.curlrc")
+        ;;
+    vi|vim|nvim)
+        RO_HOME_BINDS+=("$HOME/.vimrc" "$HOME/.vim" "$HOME/.config/nvim" "$HOME/.local/share/nvim")
+        TMPFS_BINDS+=("$HOME/.local/state/nvim" "$HOME/.cache/nvim")
+        ;;
+    bat*|delta*)
+        RO_HOME_BINDS+=("$HOME/.config/bat" "$HOME/.config/delta")
+        ;;
     gemini)
         RW_BINDS+=("$HOME/.config/gemini" "$HOME/.gemini")
         ENV+=(
@@ -63,6 +114,14 @@ for p in "${RW_BINDS[@]}"; do
     [ -e "$p" ] && extra_binds+=(--bind "$p" "$p")
 done
 
+for p in "${RO_HOME_BINDS[@]}"; do
+    [ -e "$p" ] && extra_binds+=(--ro-bind "$p" "$p")
+done
+
+for p in "${TMPFS_BINDS[@]}"; do
+    extra_binds+=(--tmpfs "$p")
+done
+
 RO_BINDS=(/usr /bin /lib /lib64 /etc /opt)
 for p in "${RO_BINDS[@]}"; do
     [ -e "$p" ] && extra_binds+=(--ro-bind "$p" "$p")
@@ -73,6 +132,7 @@ add_path_binds "${C_INCLUDE_PATH:-}"
 add_path_binds "${CPLUS_INCLUDE_PATH:-}"
 add_path_binds "${LIBRARY_PATH:-}"
 add_path_binds "${LD_LIBRARY_PATH:-}"
+add_path_binds "$EXTRA_PATH_BINDS"
 
 # Pass through these variables if they are set
 [ -n "${C_INCLUDE_PATH:-}" ] && ENV+=(--setenv C_INCLUDE_PATH "$C_INCLUDE_PATH")
