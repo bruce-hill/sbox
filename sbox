@@ -6,6 +6,37 @@
 set -euo pipefail
 
 WORKSPACE="$(realpath "$PWD")"
+
+usage() {
+    cat <<EOF
+Usage: sbox [OPTIONS] CMD [ARGS...]
+
+A secure sandbox wrapper using bubblewrap.
+
+Options:
+  -h, --help    Show this help message and exit
+
+Supported Tools (with specialized bindings):
+  Shells: bash, sh, dash, zsh, fish, ksh, tcsh, csh, pwsh
+  Editors: vi, vim, nvim
+  VCS: git, ssh
+  Languages: python, perl, go, lua, node, npm, yarn, pnpm, cargo, rust, ruby, gem, bundle, java, mvn, gradle
+  Other: gemini, claude, curl, bat, delta
+
+Examples:
+  sbox bash
+  sbox gemini -r
+  sbox python script.py
+  sbox sh -c 'curl https://example.com/script.sh | bash'
+
+EOF
+}
+
+if [[ $# -eq 0 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
 CMD=("${@}")
 
 ENV=()
