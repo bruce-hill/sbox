@@ -9,60 +9,12 @@ WORKSPACE="$(realpath "$PWD")"
 CMD=("${@}")
 
 ENV=()
-RO_HOME_BINDS=()
 TMPFS_BINDS=()
 EXTRA_PATH_BINDS=""
 
-RW_BINDS=("$HOME/go" "$HOME/.cache/go-build")
+RW_BINDS=()
+RO_BINDS=(/usr /bin /lib /lib64 /etc /opt)
 case "${CMD[0]}" in
-    python*)
-        RO_HOME_BINDS+=("$HOME/.pythonrc.py")
-        for d in "$HOME/.local/lib"/python*; do [ -d "$d" ] && RO_HOME_BINDS+=("$d"); done
-        TMPFS_BINDS+=("$HOME/.cache/pip")
-        [ -n "${PYTHONPATH:-}" ] && {
-            ENV+=(--setenv PYTHONPATH "$PYTHONPATH")
-            EXTRA_PATH_BINDS="${EXTRA_PATH_BINDS:+$EXTRA_PATH_BINDS:}$PYTHONPATH"
-        }
-        ;;
-    lua*)
-        RO_HOME_BINDS+=("$HOME/.lua" "$HOME/.luarocks")
-        [ -n "${LUA_PATH:-}" ] && ENV+=(--setenv LUA_PATH "$LUA_PATH")
-        [ -n "${LUA_CPATH:-}" ] && ENV+=(--setenv LUA_CPATH "$LUA_CPATH")
-        ;;
-    node*|npm*|yarn*|pnpm*)
-        RO_HOME_BINDS+=("$HOME/.npmrc" "$HOME/.yarnrc")
-        TMPFS_BINDS+=("$HOME/.npm" "$HOME/.cache/yarn" "$HOME/.local/share/pnpm")
-        [ -n "${NODE_PATH:-}" ] && ENV+=(--setenv NODE_PATH "$NODE_PATH")
-        ;;
-    cargo*|rust*)
-        RO_HOME_BINDS+=("$HOME/.rustup" "$HOME/.cargo/config.toml")
-        TMPFS_BINDS+=("$HOME/.cargo/registry" "$HOME/.cargo/git")
-        ;;
-    ruby*|gem*|bundle*)
-        RO_HOME_BINDS+=("$HOME/.gemrc" "$HOME/.bundle/config")
-        TMPFS_BINDS+=("$HOME/.gem")
-        ;;
-    java*|mvn*|gradle*)
-        RO_HOME_BINDS+=("$HOME/.m2/settings.xml")
-        TMPFS_BINDS+=("$HOME/.m2/repository" "$HOME/.gradle/caches")
-        ;;
-    ssh*|git*)
-        RO_HOME_BINDS+=("$HOME/.ssh/config")
-        if [ -n "${SSH_AUTH_SOCK:-}" ]; then
-            RW_BINDS+=("$SSH_AUTH_SOCK")
-            ENV+=(--setenv SSH_AUTH_SOCK "$SSH_AUTH_SOCK")
-        fi
-        ;;
-    curl*)
-        RO_HOME_BINDS+=("$HOME/.curlrc")
-        ;;
-    vi|vim|nvim)
-        RO_HOME_BINDS+=("$HOME/.vimrc" "$HOME/.vim" "$HOME/.config/nvim" "$HOME/.local/share/nvim")
-        TMPFS_BINDS+=("$HOME/.local/state/nvim" "$HOME/.cache/nvim")
-        ;;
-    bat*|delta*)
-        RO_HOME_BINDS+=("$HOME/.config/bat" "$HOME/.config/delta")
-        ;;
     gemini)
         RW_BINDS+=("$HOME/.config/gemini" "$HOME/.gemini")
         ENV+=(
@@ -80,6 +32,64 @@ case "${CMD[0]}" in
             "--setenv" "GIT_COMMITTER_NAME" "Claude"
             "--setenv" "GIT_COMMITTER_EMAIL" "claude@anthropic.com"
         )
+        ;;
+    python*)
+        RO_BINDS+=("$HOME/.pythonrc.py")
+        for d in "$HOME/.local/lib"/python*; do [ -d "$d" ] && RO_BINDS+=("$d"); done
+        TMPFS_BINDS+=("$HOME/.cache/pip")
+        [ -n "${PYTHONPATH:-}" ] && {
+            ENV+=(--setenv PYTHONPATH "$PYTHONPATH")
+            EXTRA_PATH_BINDS="${EXTRA_PATH_BINDS:+$EXTRA_PATH_BINDS:}$PYTHONPATH"
+        }
+        ;;
+    perl*)
+        RO_BINDS+=("$HOME/.perlrc" "$HOME/perl5")
+        [ -n "${PERL5LIB:-}" ] && {
+            ENV+=(--setenv PERL5LIB "$PERL5LIB")
+            EXTRA_PATH_BINDS="${EXTRA_PATH_BINDS:+$EXTRA_PATH_BINDS:}$PERL5LIB"
+        }
+        ;;
+    go*)
+        RW_BINDS+=("$HOME/go" "$HOME/.cache/go-build")
+        ;;
+    lua*)
+        RO_BINDS+=("$HOME/.lua" "$HOME/.luarocks")
+        [ -n "${LUA_PATH:-}" ] && ENV+=(--setenv LUA_PATH "$LUA_PATH")
+        [ -n "${LUA_CPATH:-}" ] && ENV+=(--setenv LUA_CPATH "$LUA_CPATH")
+        ;;
+    node*|npm*|yarn*|pnpm*)
+        RO_BINDS+=("$HOME/.npmrc" "$HOME/.yarnrc")
+        TMPFS_BINDS+=("$HOME/.npm" "$HOME/.cache/yarn" "$HOME/.local/share/pnpm")
+        [ -n "${NODE_PATH:-}" ] && ENV+=(--setenv NODE_PATH "$NODE_PATH")
+        ;;
+    cargo*|rust*)
+        RO_BINDS+=("$HOME/.rustup" "$HOME/.cargo/config.toml")
+        TMPFS_BINDS+=("$HOME/.cargo/registry" "$HOME/.cargo/git")
+        ;;
+    ruby*|gem*|bundle*)
+        RO_BINDS+=("$HOME/.gemrc" "$HOME/.bundle/config")
+        TMPFS_BINDS+=("$HOME/.gem")
+        ;;
+    java*|mvn*|gradle*)
+        RO_BINDS+=("$HOME/.m2/settings.xml")
+        TMPFS_BINDS+=("$HOME/.m2/repository" "$HOME/.gradle/caches")
+        ;;
+    ssh*|git*)
+        RO_BINDS+=("$HOME/.ssh/config")
+        if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+            RW_BINDS+=("$SSH_AUTH_SOCK")
+            ENV+=(--setenv SSH_AUTH_SOCK "$SSH_AUTH_SOCK")
+        fi
+        ;;
+    curl*)
+        RO_BINDS+=("$HOME/.curlrc")
+        ;;
+    vi|vim|nvim)
+        RO_BINDS+=("$HOME/.vimrc" "$HOME/.vim" "$HOME/.config/nvim" "$HOME/.local/share/nvim")
+        TMPFS_BINDS+=("$HOME/.local/state/nvim" "$HOME/.cache/nvim")
+        ;;
+    bat*|delta*)
+        RO_BINDS+=("$HOME/.config/bat" "$HOME/.config/delta")
         ;;
 esac
 
@@ -114,15 +124,10 @@ for p in "${RW_BINDS[@]}"; do
     [ -e "$p" ] && extra_binds+=(--bind "$p" "$p")
 done
 
-for p in "${RO_HOME_BINDS[@]}"; do
-    [ -e "$p" ] && extra_binds+=(--ro-bind "$p" "$p")
-done
-
 for p in "${TMPFS_BINDS[@]}"; do
     extra_binds+=(--tmpfs "$p")
 done
 
-RO_BINDS=(/usr /bin /lib /lib64 /etc /opt)
 for p in "${RO_BINDS[@]}"; do
     [ -e "$p" ] && extra_binds+=(--ro-bind "$p" "$p")
 done
