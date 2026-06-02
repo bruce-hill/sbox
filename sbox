@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Usage: sbox cmd [args...]
+# Examples:
+#   sbox gemini -r
+#   sbox sh -c 'curl https://example.com/script.sh | bash'
+set -euo pipefail
+
+WORKSPACE="$(realpath "$PWD")"
+CMD=("${@}")
+
+ENV=()
+
+RW_BINDS=("$HOME/go" "$HOME/.cache/go-build")
+case "${CMD[0]}" in
+    gemini)
+        RW_BINDS+=("$HOME/.config/gemini" "$HOME/.gemini")
+        ENV+=(
+            "--setenv" "GIT_AUTHOR_NAME" "Gemini"
+            "--setenv" "GIT_AUTHOR_EMAIL" "gemini@google.com"
+            "--setenv" "GIT_COMMITTER_NAME" "Gemini"
+            "--setenv" "GIT_COMMITTER_EMAIL" "gemini@google.com"
+        )
+        ;;
+    claude)
+        RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude")
+        ENV+=(
+            "--setenv" "GIT_AUTHOR_NAME" "Claude"
+            "--setenv" "GIT_AUTHOR_EMAIL" "claude@anthropic.com"
+            "--setenv" "GIT_COMMITTER_NAME" "Claude"
+            "--setenv" "GIT_COMMITTER_EMAIL" "claude@anthropic.com"
+        )
+        ;;
+esac
+
+# Resolve agent binary path BEFORE entering sandbox
+BIN="$(command -v "${CMD[0]}" || true)"
+if [ -z "$BIN" ]; then
+    echo "Error: agent command not found: ${CMD[0]}" >&2
+    exit 1
+fi
+
+extra_binds=()
+GIT_DIR="$WORKSPACE/.git"
+if [ -f "$GIT_DIR" ]; then
+    LINKED_GIT="$(grep '^gitdir:' "$GIT_DIR" | cut -d' ' -f2)"
+    # Resolve relative paths
+    LINKED_GIT="$(realpath "$LINKED_GIT/../..")"
+    extra_binds+=(--ro-bind "$LINKED_GIT" "$LINKED_GIT")
+fi
+
+for p in "${RW_BINDS[@]}"; do
+    [ -e "$p" ] && extra_binds+=(--bind "$p" "$p")
+done
+
+RO_BINDS=(/usr /bin /lib /lib64 /etc /opt)
+for p in "${RO_BINDS[@]}"; do
+    [ -e "$p" ] && extra_binds+=(--ro-bind "$p" "$p")
+done
+
+exec bwrap \
+    --unshare-all \
+    --share-net \
+    --ro-bind /usr /usr \
+    --ro-bind /bin /bin \
+    --ro-bind /lib /lib \
+    --ro-bind /lib64 /lib64 \
+    --ro-bind /etc /etc \
+    --ro-bind /opt /opt \
+    --ro-bind "$CMD" "$CMD" \
+    --ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig" \
+    --bind "$WORKSPACE" "$WORKSPACE" \
+    "${ENV[@]}" \
+    "${extra_binds[@]}" \
+    --dev /dev \
+    --proc /proc \
+    --tmpfs /tmp \
+    --tmpfs /run \
+    --chdir "$WORKSPACE" \
+    --setenv HOME "$HOME" \
+    --setenv PATH "$PATH" \
+    -- "${CMD[@]}"
