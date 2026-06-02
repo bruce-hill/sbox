@@ -8,13 +8,14 @@ set -euo pipefail
 WORKSPACE="$(realpath "$PWD")"
 
 usage() {
-    cat <<EOF
+  cat <<EOF
 Usage: sbox [OPTIONS] CMD [ARGS...]
 
 A secure sandbox wrapper using bubblewrap.
 
 Options:
   -h, --help    Show this help message and exit
+  --home        Enable access to \$HOME (otherwise \$HOME is an empty tmpfs)
 
 Supported Tools (with specialized bindings):
   Shells: bash, sh, dash, zsh, fish, ksh, tcsh, csh, pwsh
@@ -25,6 +26,7 @@ Supported Tools (with specialized bindings):
 
 Examples:
   sbox bash
+  sbox --home bash
   sbox jj st
   sbox gemini -r
   sbox python script.py
@@ -33,181 +35,203 @@ Examples:
 EOF
 }
 
-if [[ $# -eq 0 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
-    usage
-    exit 0
+ENV=()
+TMPFS_BINDS=()
+RW_BINDS=()
+RO_BINDS=(/usr /bin /lib /lib64 /etc /opt /var/lib "$HOME/.gitconfig")
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --home)
+      RW_BINDS+=("$HOME")
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 0
 fi
 
 CMD=("${@}")
 
-ENV=()
-TMPFS_BINDS=()
-EXTRA_PATH_BINDS=""
-
-RW_BINDS=()
-RO_BINDS=(/usr /bin /lib /lib64 /etc /opt)
 case "${CMD[0]}" in
-    gemini)
-        RW_BINDS+=("$HOME/.config/gemini" "$HOME/.gemini")
-        ENV+=(
-            "--setenv" "GIT_AUTHOR_NAME" "Gemini"
-            "--setenv" "GIT_AUTHOR_EMAIL" "gemini@google.com"
-            "--setenv" "GIT_COMMITTER_NAME" "Gemini"
-            "--setenv" "GIT_COMMITTER_EMAIL" "gemini@google.com"
-        )
-        ;;
-    claude)
-        RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude")
-        ENV+=(
-            "--setenv" "GIT_AUTHOR_NAME" "Claude"
-            "--setenv" "GIT_AUTHOR_EMAIL" "claude@anthropic.com"
-            "--setenv" "GIT_COMMITTER_NAME" "Claude"
-            "--setenv" "GIT_COMMITTER_EMAIL" "claude@anthropic.com"
-        )
-        ;;
-    python*)
-        RO_BINDS+=("$HOME/.pythonrc.py")
-        for d in "$HOME/.local/lib"/python*; do [ -d "$d" ] && RO_BINDS+=("$d"); done
-        TMPFS_BINDS+=("$HOME/.cache/pip")
-        [ -n "${PYTHONPATH:-}" ] && {
-            ENV+=(--setenv PYTHONPATH "$PYTHONPATH")
-            EXTRA_PATH_BINDS="${EXTRA_PATH_BINDS:+$EXTRA_PATH_BINDS:}$PYTHONPATH"
-        }
-        ;;
-    perl*)
-        RO_BINDS+=("$HOME/.perlrc" "$HOME/perl5")
-        [ -n "${PERL5LIB:-}" ] && {
-            ENV+=(--setenv PERL5LIB "$PERL5LIB")
-            EXTRA_PATH_BINDS="${EXTRA_PATH_BINDS:+$EXTRA_PATH_BINDS:}$PERL5LIB"
-        }
-        ;;
-    go*)
-        RW_BINDS+=("$HOME/go" "$HOME/.cache/go-build")
-        ;;
-    lua*)
-        RO_BINDS+=("$HOME/.lua" "$HOME/.luarocks")
-        [ -n "${LUA_PATH:-}" ] && ENV+=(--setenv LUA_PATH "$LUA_PATH")
-        [ -n "${LUA_CPATH:-}" ] && ENV+=(--setenv LUA_CPATH "$LUA_CPATH")
-        ;;
-    node*|npm*|yarn*|pnpm*)
-        RO_BINDS+=("$HOME/.npmrc" "$HOME/.yarnrc")
-        TMPFS_BINDS+=("$HOME/.npm" "$HOME/.cache/yarn" "$HOME/.local/share/pnpm")
-        [ -n "${NODE_PATH:-}" ] && ENV+=(--setenv NODE_PATH "$NODE_PATH")
-        ;;
-    cargo*|rust*)
-        RO_BINDS+=("$HOME/.rustup" "$HOME/.cargo/config.toml")
-        TMPFS_BINDS+=("$HOME/.cargo/registry" "$HOME/.cargo/git")
-        ;;
-    ruby*|gem*|bundle*)
-        RO_BINDS+=("$HOME/.gemrc" "$HOME/.bundle/config")
-        TMPFS_BINDS+=("$HOME/.gem")
-        ;;
-    java*|mvn*|gradle*)
-        RO_BINDS+=("$HOME/.m2/settings.xml")
-        TMPFS_BINDS+=("$HOME/.m2/repository" "$HOME/.gradle/caches")
-        ;;
-    ssh*|git*|jj)
-        RO_BINDS+=("$HOME/.ssh" "$HOME/.config/git" "$HOME/.config/jj")
-        if [ -n "${SSH_AUTH_SOCK:-}" ]; then
-            RW_BINDS+=("$SSH_AUTH_SOCK")
-            ENV+=(--setenv SSH_AUTH_SOCK "$SSH_AUTH_SOCK")
-        fi
-        ;;
-    curl*)
-        RO_BINDS+=("$HOME/.curlrc")
-        ;;
-    vi|vim|nvim)
-        RO_BINDS+=("$HOME/.vimrc" "$HOME/.vim" "$HOME/.config/nvim" "$HOME/.local/share/nvim")
-        TMPFS_BINDS+=("$HOME/.local/state/nvim" "$HOME/.cache/nvim")
-        ;;
-    bat*|delta*)
-        RO_BINDS+=("$HOME/.config/bat" "$HOME/.config/delta")
-        ;;
-    bash|sh|dash)
-        RO_BINDS+=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile" "$HOME/.inputrc")
-        ;;
-    zsh)
-        RO_BINDS+=("$HOME/.zshrc" "$HOME/.zshenv" "$HOME/.zprofile" "$HOME/.zlogin" "$HOME/.profile" "$HOME/.inputrc")
-        ;;
-    fish)
-        RO_BINDS+=("$HOME/.config/fish")
-        ;;
-    ksh)
-        RO_BINDS+=("$HOME/.kshrc" "$HOME/.profile")
-        ;;
-    tcsh|csh)
-        RO_BINDS+=("$HOME/.tcshrc" "$HOME/.cshrc" "$HOME/.login")
-        ;;
-    pwsh)
-        RO_BINDS+=("$HOME/.config/powershell")
-        ;;
+  gemini)
+    RW_BINDS+=("$HOME/.config/gemini" "$HOME/.gemini")
+    ENV+=(
+      "--setenv" "GIT_AUTHOR_NAME" "Gemini"
+      "--setenv" "GIT_AUTHOR_EMAIL" "gemini@google.com"
+      "--setenv" "GIT_COMMITTER_NAME" "Gemini"
+      "--setenv" "GIT_COMMITTER_EMAIL" "gemini@google.com"
+    )
+    ;;
+  claude)
+    RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude")
+    ENV+=(
+      "--setenv" "GIT_AUTHOR_NAME" "Claude"
+      "--setenv" "GIT_AUTHOR_EMAIL" "claude@anthropic.com"
+      "--setenv" "GIT_COMMITTER_NAME" "Claude"
+      "--setenv" "GIT_COMMITTER_EMAIL" "claude@anthropic.com"
+    )
+    ;;
+  python*)
+    RO_BINDS+=("$HOME/.pythonrc.py")
+    for d in "$HOME/.local/lib"/python*; do [ -d "$d" ] && RO_BINDS+=("$d"); done
+    TMPFS_BINDS+=("$HOME/.cache/pip")
+    if [ -n "${PYTHONPATH:-}" ]; then
+      ENV+=(--setenv PYTHONPATH "$PYTHONPATH")
+      add_path_binds "$PYTHONPATH"
+    fi
+    ;;
+  perl*)
+    RO_BINDS+=("$HOME/.perlrc" "$HOME/perl5")
+    if [ -n "${PERL5LIB:-}" ]; then
+      ENV+=(--setenv PERL5LIB "$PERL5LIB")
+      add_path_binds "$PERL5LIB"
+    fi
+    ;;
+  go*)
+    RW_BINDS+=("$HOME/go" "$HOME/.cache/go-build")
+    ;;
+  lua*)
+    RO_BINDS+=("$HOME/.lua" "$HOME/.luarocks")
+    [ -n "${LUA_PATH:-}" ] && ENV+=(--setenv LUA_PATH "$LUA_PATH")
+    [ -n "${LUA_CPATH:-}" ] && ENV+=(--setenv LUA_CPATH "$LUA_CPATH")
+    ;;
+  node*|npm*|yarn*|pnpm*)
+    RO_BINDS+=("$HOME/.npmrc" "$HOME/.yarnrc")
+    TMPFS_BINDS+=("$HOME/.npm" "$HOME/.cache/yarn" "$HOME/.local/share/pnpm")
+    [ -n "${NODE_PATH:-}" ] && ENV+=(--setenv NODE_PATH "$NODE_PATH")
+    ;;
+  cargo*|rust*)
+    RO_BINDS+=("$HOME/.rustup" "$HOME/.cargo/config.toml")
+    TMPFS_BINDS+=("$HOME/.cargo/registry" "$HOME/.cargo/git")
+    ;;
+  ruby*|gem*|bundle*)
+    RO_BINDS+=("$HOME/.gemrc" "$HOME/.bundle/config")
+    TMPFS_BINDS+=("$HOME/.gem")
+    ;;
+  java*|mvn*|gradle*)
+    RO_BINDS+=("$HOME/.m2/settings.xml")
+    TMPFS_BINDS+=("$HOME/.m2/repository" "$HOME/.gradle/caches")
+    ;;
+  ssh*|git*|jj)
+    RO_BINDS+=("$HOME/.ssh" "$HOME/.config/git" "$HOME/.config/jj")
+    if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+      RW_BINDS+=("$SSH_AUTH_SOCK")
+      ENV+=(--setenv SSH_AUTH_SOCK "$SSH_AUTH_SOCK")
+    fi
+    ;;
+  curl*)
+    RO_BINDS+=("$HOME/.curlrc")
+    ;;
+  vi|vim|nvim)
+    RO_BINDS+=("$HOME/.vimrc" "$HOME/.vim" "$HOME/.config/nvim" "$HOME/.local/share/nvim")
+    TMPFS_BINDS+=("$HOME/.local/state/nvim" "$HOME/.cache/nvim")
+    ;;
+  bat*|delta*)
+    RO_BINDS+=("$HOME/.config/bat" "$HOME/.config/delta")
+    ;;
+  bash|sh|dash)
+    RO_BINDS+=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile" "$HOME/.inputrc")
+    ;;
+  zsh)
+    RO_BINDS+=("$HOME/.zshrc" "$HOME/.zshenv" "$HOME/.zprofile" "$HOME/.zlogin" "$HOME/.profile" "$HOME/.inputrc")
+    ;;
+  fish)
+    RO_BINDS+=("$HOME/.config/fish")
+    ;;
+  ksh)
+    RO_BINDS+=("$HOME/.kshrc" "$HOME/.profile")
+    ;;
+  tcsh|csh)
+    RO_BINDS+=("$HOME/.tcshrc" "$HOME/.cshrc" "$HOME/.login")
+    ;;
+  pwsh)
+    RO_BINDS+=("$HOME/.config/powershell")
+    ;;
 esac
 
 # Resolve binary path BEFORE entering sandbox
 BIN="$(command -v "${CMD[0]}" || true)"
 if [ -z "$BIN" ]; then
-    echo "Error: command not found: ${CMD[0]}" >&2
-    exit 1
+  echo "Error: command not found: ${CMD[0]}" >&2
+  exit 1
 fi
 
-extra_binds=()
+RO_BINDS+=("$BIN")
+
 add_path_binds() {
-    local path_val="$1"
-    [ -z "$path_val" ] && return
-    IFS=':' read -ra ADDR <<< "$path_val"
-    for p in "${ADDR[@]}"; do
-        if [ -d "$p" ]; then
-            extra_binds+=(--ro-bind "$p" "$p")
-        fi
-    done
+  local path_val="$1"
+  [ -z "$path_val" ] && return
+  IFS=':' read -ra ADDR <<< "$path_val"
+  for p in "${ADDR[@]}"; do
+    if [ -d "$p" ]; then
+      RO_BINDS+=("$p")
+    fi
+  done
 }
 
-GIT_DIR="$WORKSPACE/.git"
-if [ -f "$GIT_DIR" ]; then
+if [ "$WORKSPACE" != "$HOME" ]; then
+  RW_BINDS+=("$WORKSPACE")
+
+  GIT_DIR="$WORKSPACE/.git"
+  if [ -f "$GIT_DIR" ]; then
     LINKED_GIT="$(grep '^gitdir:' "$GIT_DIR" | cut -d' ' -f2)"
     # Resolve relative paths
-    LINKED_GIT="$(realpath "$LINKED_GIT/../..")"
-    extra_binds+=(--ro-bind "$LINKED_GIT" "$LINKED_GIT")
+    RO_BINDS+=("$(realpath "$LINKED_GIT/../..")")
+  fi
 fi
 
-for p in "${RW_BINDS[@]}"; do
-    [ -e "$p" ] && extra_binds+=(--bind "$p" "$p")
-done
+add_path_binds "${CPATH:-}"
+add_path_binds "${CPLUS_INCLUDE_PATH:-}"
+add_path_binds "${C_INCLUDE_PATH:-}"
+add_path_binds "${LD_LIBRARY_PATH:-}"
+add_path_binds "${LIBRARY_PATH:-}"
+add_path_binds "${OBJ_INCLUDE_PATH:-}"
+add_path_binds "${PATH:-}"
+
+# Pass through these variables if they are set
+[ -n "${CPATH:-}" ] && ENV+=(--setenv CPATH "$CPATH")
+[ -n "${CPLUS_INCLUDE_PATH:-}" ] && ENV+=(--setenv CPLUS_INCLUDE_PATH "$CPLUS_INCLUDE_PATH")
+[ -n "${C_INCLUDE_PATH:-}" ] && ENV+=(--setenv C_INCLUDE_PATH "$C_INCLUDE_PATH")
+[ -n "${LD_LIBRARY_PATH:-}" ] && ENV+=(--setenv LD_LIBRARY_PATH "$LD_LIBRARY_PATH")
+[ -n "${LIBRARY_PATH:-}" ] && ENV+=(--setenv LIBRARY_PATH "$LIBRARY_PATH")
+[ -n "${OBJ_INCLUDE_PATH:-}" ] && ENV+=(--setenv OBJ_INCLUDE_PATH "$OBJ_INCLUDE_PATH")
+[ -n "${PATH:-}" ] && ENV+=(--setenv PATH "$PATH")
+
+bind_args=()
 
 for p in "${TMPFS_BINDS[@]}"; do
-    extra_binds+=(--tmpfs "$p")
+  bind_args+=(--tmpfs "$p")
 done
 
 for p in "${RO_BINDS[@]}"; do
-    [ -e "$p" ] && extra_binds+=(--ro-bind "$p" "$p")
+  [ -e "$p" ] && bind_args+=(--ro-bind "$p" "$p")
 done
 
-add_path_binds "$PATH"
-add_path_binds "${C_INCLUDE_PATH:-}"
-add_path_binds "${CPLUS_INCLUDE_PATH:-}"
-add_path_binds "${LIBRARY_PATH:-}"
-add_path_binds "${LD_LIBRARY_PATH:-}"
-add_path_binds "$EXTRA_PATH_BINDS"
-
-# Pass through these variables if they are set
-[ -n "${C_INCLUDE_PATH:-}" ] && ENV+=(--setenv C_INCLUDE_PATH "$C_INCLUDE_PATH")
-[ -n "${CPLUS_INCLUDE_PATH:-}" ] && ENV+=(--setenv CPLUS_INCLUDE_PATH "$CPLUS_INCLUDE_PATH")
-[ -n "${LIBRARY_PATH:-}" ] && ENV+=(--setenv LIBRARY_PATH "$LIBRARY_PATH")
-[ -n "${LD_LIBRARY_PATH:-}" ] && ENV+=(--setenv LD_LIBRARY_PATH "$LD_LIBRARY_PATH")
+for p in "${RW_BINDS[@]}"; do
+  [ -e "$p" ] && bind_args+=(--bind "$p" "$p")
+done
 
 exec bwrap \
-    --unshare-all \
-    --share-net \
-    --ro-bind "$BIN" "$BIN" \
-    --ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig" \
-    --bind "$WORKSPACE" "$WORKSPACE" \
-    "${ENV[@]}" \
-    "${extra_binds[@]}" \
-    --dev /dev \
-    --proc /proc \
-    --tmpfs /tmp \
-    --tmpfs /run \
-    --chdir "$WORKSPACE" \
-    --setenv HOME "$HOME" \
-    --setenv PATH "$PATH" \
-    -- "${CMD[@]}"
+  --unshare-all \
+  --share-net \
+  "${ENV[@]}" \
+  "${bind_args[@]}" \
+  --dev /dev \
+  --proc /proc \
+  --tmpfs /tmp \
+  --tmpfs /run \
+  --chdir "$WORKSPACE" \
+  --setenv HOME "$HOME" \
+  --setenv PATH "$PATH" \
+  -- "${CMD[@]}"
