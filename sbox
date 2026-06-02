@@ -91,6 +91,24 @@ case "${CMD[0]}" in
     bat*|delta*)
         RO_BINDS+=("$HOME/.config/bat" "$HOME/.config/delta")
         ;;
+    bash|sh|dash)
+        RO_BINDS+=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile" "$HOME/.inputrc")
+        ;;
+    zsh)
+        RO_BINDS+=("$HOME/.zshrc" "$HOME/.zshenv" "$HOME/.zprofile" "$HOME/.zlogin" "$HOME/.profile" "$HOME/.inputrc")
+        ;;
+    fish)
+        RO_BINDS+=("$HOME/.config/fish")
+        ;;
+    ksh)
+        RO_BINDS+=("$HOME/.kshrc" "$HOME/.profile")
+        ;;
+    tcsh|csh)
+        RO_BINDS+=("$HOME/.tcshrc" "$HOME/.cshrc" "$HOME/.login")
+        ;;
+    pwsh)
+        RO_BINDS+=("$HOME/.config/powershell")
+        ;;
 esac
 
 # Resolve binary path BEFORE entering sandbox
