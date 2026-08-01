@@ -66,6 +66,7 @@ CMD=("${@}")
 case "${CMD[0]}" in
   gemini)
     RW_BINDS+=("$HOME/.config/gemini" "$HOME/.gemini")
+    RO_BINDS+=("$HOME/.agents")
     ENV+=(
       "--setenv" "GIT_AUTHOR_NAME" "Gemini"
       "--setenv" "GIT_AUTHOR_EMAIL" "gemini@google.com"
@@ -75,6 +76,7 @@ case "${CMD[0]}" in
     ;;
   claude)
     RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude" "$HOME/.claude.json")
+    RO_BINDS+=("$HOME/.agents")
     ENV+=(
       "--setenv" "GIT_AUTHOR_NAME" "Claude"
       "--setenv" "GIT_AUTHOR_EMAIL" "claude@anthropic.com"
