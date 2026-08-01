@@ -74,7 +74,7 @@ case "${CMD[0]}" in
     )
     ;;
   claude)
-    RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude")
+    RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude" "$HOME/.claude.json")
     ENV+=(
       "--setenv" "GIT_AUTHOR_NAME" "Claude"
       "--setenv" "GIT_AUTHOR_EMAIL" "claude@anthropic.com"
@@ -160,11 +160,17 @@ case "${CMD[0]}" in
     ;;
 esac
 
+[ -n "${CARGO_TARGET_DIR:-}" ] && ENV+=(--setenv CARGO_TARGET_DIR "$CARGO_TARGET_DIR")
+
 # Resolve binary path BEFORE entering sandbox
 BIN="$(command -v "${CMD[0]}" || true)"
 if [ -z "$BIN" ]; then
   echo "Error: command not found: ${CMD[0]}" >&2
   exit 1
+fi
+
+if [ -L "$BIN" ]; then
+  BIN="$(readlink "$BIN")"
 fi
 
 RO_BINDS+=("$BIN")
@@ -233,5 +239,4 @@ exec bwrap \
   --tmpfs /run \
   --chdir "$WORKSPACE" \
   --setenv HOME "$HOME" \
-  --setenv PATH "$PATH" \
   -- "${CMD[@]}"
