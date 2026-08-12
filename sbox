@@ -75,7 +75,7 @@ case "${CMD[0]}" in
     )
     ;;
   claude)
-    RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude" "$HOME/.claude.json")
+    RW_BINDS+=("$HOME/.claude.json" "$HOME/.claude" "$HOME/.config/claude")
     RO_BINDS+=("$HOME/.agents")
     ENV+=(
       "--setenv" "CLAUDE_CONFIG_DIR" "$CLAUDE_CONFIG_DIR"
