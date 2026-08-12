@@ -78,6 +78,7 @@ case "${CMD[0]}" in
     RW_BINDS+=("$HOME/.config/claude" "$HOME/.claude" "$HOME/.claude.json")
     RO_BINDS+=("$HOME/.agents")
     ENV+=(
+      "--setenv" "CLAUDE_CONFIG_DIR" "$CLAUDE_CONFIG_DIR"
       "--setenv" "GIT_AUTHOR_NAME" "Claude"
       "--setenv" "GIT_AUTHOR_EMAIL" "claude@anthropic.com"
       "--setenv" "GIT_COMMITTER_NAME" "Claude"
