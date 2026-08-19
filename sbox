@@ -38,7 +38,7 @@ EOF
 ENV=()
 TMPFS_BINDS=()
 RW_BINDS=()
-RO_BINDS=(/usr /bin /lib /lib64 /etc /opt /var/lib "$HOME/.gitconfig" "$HOME/.local/lib" "$HOME/.local/bin" "$HOME/.local/libexec" "$HOME/.local/include" "$HOME/.local/share")
+RO_BINDS=(/usr /bin /lib /lib64 /etc /opt /var/lib /sys/class/power_supply "$HOME/.gitconfig" "$HOME/.local/lib" "$HOME/.local/bin" "$HOME/.local/libexec" "$HOME/.local/include" "$HOME/.local/share")
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
