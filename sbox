@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: sbox cmd [args...]
 # Examples:
-#   sbox gemini -r
+#   sbox claude
 #   sbox sh -c 'curl https://example.com/script.sh | bash'
 set -euo pipefail
 
@@ -22,13 +22,13 @@ Supported Tools (with specialized bindings):
   Editors: vi, vim, nvim
   VCS: git, ssh, jj
   Languages: python, perl, go, lua, node, npm, yarn, pnpm, cargo, rust, ruby, gem, bundle, java, mvn, gradle
-  Other: gemini, claude, curl, bat, delta
+  Other: claude, curl, bat, delta
 
 Examples:
   sbox bash
   sbox --home bash
   sbox jj st
-  sbox gemini -r
+  sbox claude -r
   sbox python script.py
   sbox sh -c 'curl https://example.com/script.sh | bash'
 
@@ -64,16 +64,6 @@ fi
 CMD=("${@}")
 
 case "${CMD[0]}" in
-  gemini)
-    RW_BINDS+=("$HOME/.config/gemini" "$HOME/.gemini")
-    RO_BINDS+=("$HOME/.agents")
-    ENV+=(
-      "--setenv" "GIT_AUTHOR_NAME" "Gemini"
-      "--setenv" "GIT_AUTHOR_EMAIL" "gemini@google.com"
-      "--setenv" "GIT_COMMITTER_NAME" "Gemini"
-      "--setenv" "GIT_COMMITTER_EMAIL" "gemini@google.com"
-    )
-    ;;
   claude)
     RW_BINDS+=("$HOME/.claude.json" "$HOME/.claude" "$HOME/.config/claude")
     RO_BINDS+=("$HOME/.agents")

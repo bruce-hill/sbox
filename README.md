@@ -15,6 +15,6 @@ you run `sbox ssh example.com`, it will have access to `~/.ssh` and not
 One intended use case is for sandboxing coding agents. You shouldn't have to
 trust the company that makes the coding agent to not snoop around in your
 `~/.ssh` directory or read the code in other repositories. So, you can prevent
-that happening using `sbox claude`, `sbox gemini`, etc. to limit the agents to
-only working in the current directory, while still allowing some basic readonly
-access to other parts of your filesystem like `/usr/local/bin`, etc.
+that happening using `sbox claude`, etc. to limit the agents to only working in
+the current directory, while still allowing some basic readonly access to other
+parts of your filesystem like `/usr/local/bin`, etc.
