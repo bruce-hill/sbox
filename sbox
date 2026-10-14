@@ -183,6 +183,9 @@ add_path_binds() {
   [ -z "$path_val" ] && return
   IFS=':' read -ra ADDR <<< "$path_val"
   for p in "${ADDR[@]}"; do
+    if [ -L "$p" ]; then
+      p="$(readlink "$p")"
+    fi
     if [ -d "$p" ]; then
       RO_BINDS+=("$p")
     fi
